@@ -1,0 +1,21 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 51.83.42.93
+          username: debian
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /home/debian/nutri-count
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
