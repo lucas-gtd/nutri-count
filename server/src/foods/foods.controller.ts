@@ -18,6 +18,11 @@ export class FoodsController {
     return this.foodsService.findByBarcode(barcode);
   }
 
+  @Post('import')
+  importFromOff(@Body() dto: CreateFoodDto) {
+    return this.foodsService.importFromOff(dto);
+  }
+
   @Post()
   create(@Body() dto: CreateFoodDto) {
     return this.foodsService.create(dto);

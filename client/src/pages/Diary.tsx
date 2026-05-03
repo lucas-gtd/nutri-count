@@ -15,6 +15,40 @@ const mealLabels: Record<MealType, string> = {
   snack: 'Collation',
 };
 
+const OFF_SEARCH_URL = 'https://world.openfoodfacts.org/api/v2/search';
+const OFF_FIELDS = 'code,product_name,brands,nutriments';
+
+async function searchOpenFoodFacts(query: string): Promise<any[]> {
+  try {
+    const url = `${OFF_SEARCH_URL}?search_terms=${encodeURIComponent(query)}&fields=${OFF_FIELDS}&page_size=100&sort_by=unique_scans_n`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data.products)) return [];
+    return data.products
+      .filter((p: any) =>
+        p.product_name?.toLowerCase().includes(query.toLowerCase()),
+      )
+      .slice(0, 20)
+      .map((p: any) => {
+        const n = p.nutriments || {};
+        return {
+          _offProduct: true,
+          barcode: p.code || undefined,
+          name: p.product_name,
+          brand: p.brands || undefined,
+          calories_per_100g: n['energy-kcal_100g'] ?? 0,
+          proteins_per_100g: n['proteins_100g'] ?? 0,
+          carbs_per_100g: n['carbohydrates_100g'] ?? 0,
+          fats_per_100g: n['fat_100g'] ?? 0,
+          fiber_per_100g: n['fiber_100g'] ?? 0,
+        };
+      });
+  } catch {
+    return [];
+  }
+}
+
 export default function Diary() {
   const [selectedMeal, setSelectedMeal] = useState<MealType>('breakfast');
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,6 +58,7 @@ export default function Diary() {
   const [quantity, setQuantity] = useState('100');
   const [message, setMessage] = useState('');
   const [showScanner, setShowScanner] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   const handleScannedBarcode = useCallback(async (scannedBarcode: string) => {
     setShowScanner(false);
@@ -39,8 +74,26 @@ export default function Diary() {
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-    const results = await api.searchFoods(searchQuery);
-    setSearchResults(results);
+    setSearching(true);
+    try {
+      const [local, remote] = await Promise.all([
+        api.searchFoods(searchQuery),
+        searchOpenFoodFacts(searchQuery),
+      ]);
+      const localNames = new Set(local.map((f: any) => f.name.toLowerCase()));
+      const merged = [
+        ...local,
+        ...remote.filter((f: any) => !localNames.has(f.name.toLowerCase())),
+      ];
+      if (merged.length === 0) {
+        setMessage('Aucun résultat trouvé. Open Food Facts est peut-être temporairement indisponible.');
+      } else {
+        setMessage('');
+      }
+      setSearchResults(merged.slice(0, 20));
+    } finally {
+      setSearching(false);
+    }
   };
 
   const handleBarcode = async () => {
@@ -56,14 +109,20 @@ export default function Diary() {
 
   const handleAdd = async () => {
     if (!selectedFood) return;
+    let food = selectedFood;
+    if (food._offProduct) {
+      // Save the OFF product to the local DB first
+      const { _offProduct, ...dto } = food;
+      food = await api.importFoodFromOff(dto);
+    }
     await api.addDiaryEntry({
-      food_id: selectedFood.id,
+      food_id: food.id,
       meal_type: selectedMeal,
       quantity_g: Number(quantity),
       date: today(),
     });
     setMessage(
-      `${selectedFood.name} ajouté (${quantity}g) au ${mealLabels[selectedMeal]}`,
+      `${food.name} ajouté (${quantity}g) au ${mealLabels[selectedMeal]}`,
     );
     setSelectedFood(null);
     setQuantity('100');
@@ -110,9 +169,10 @@ export default function Diary() {
             />
             <button
               onClick={handleSearch}
-              className="bg-green-600 text-white px-4 py-2 rounded-md"
+              disabled={searching}
+              className="bg-green-600 text-white px-4 py-2 rounded-md disabled:opacity-60"
             >
-              Chercher
+              {searching ? 'Recherche…' : 'Chercher'}
             </button>
           </div>
         </div>

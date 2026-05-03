@@ -18,6 +18,20 @@ export class FoodsService {
     });
   }
 
+  async importFromOff(dto: CreateFoodDto): Promise<Food> {
+    if (dto.barcode) {
+      const existing = await this.foodsRepository.findOne({
+        where: { barcode: dto.barcode },
+      });
+      if (existing) return existing;
+    }
+    const food = this.foodsRepository.create({
+      ...dto,
+      source: FoodSource.OPENFOODFACTS,
+    });
+    return this.foodsRepository.save(food);
+  }
+
   async findByBarcode(barcode: string): Promise<Food> {
     let food = await this.foodsRepository.findOne({ where: { barcode } });
     if (food) return food;
@@ -25,7 +39,14 @@ export class FoodsService {
     // Fetch from Open Food Facts
     const response = await fetch(
       `https://world.openfoodfacts.org/api/v2/product/${barcode}`,
+      {
+        headers: {
+          'User-Agent':
+            'NutriCount/1.0 (https://github.com/lucas-gtd/nutri-count)',
+        },
+      },
     );
+    if (!response.ok) throw new NotFoundException('Product not found');
     const data = await response.json();
 
     if (data.status !== 1 || !data.product) {
