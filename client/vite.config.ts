@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
+    allowedHosts: true,
     proxy: {
       '/api': process.env.API_URL || 'http://localhost:3001',
     },
