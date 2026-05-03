@@ -8,10 +8,18 @@ interface BarcodeScannerProps {
 
 export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const onScanRef = useRef(onScan);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const scanner = new Html5Qrcode('barcode-reader');
+    onScanRef.current = onScan;
+  }, [onScan]);
+
+  useEffect(() => {
+    let scanner: Html5Qrcode | null = null;
+    let stopped = false;
+
+    scanner = new Html5Qrcode('barcode-reader');
     scannerRef.current = scanner;
 
     scanner
@@ -19,9 +27,14 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 150 } },
         (decodedText) => {
-          scanner.stop().then(() => {
-            onScan(decodedText);
-          });
+          if (stopped) return;
+          stopped = true;
+          scanner!.stop()
+            .catch(() => {})
+            .finally(() => {
+              scanner!.clear();
+              onScanRef.current(decodedText);
+            });
         },
         () => {},
       )
@@ -31,11 +44,15 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       });
 
     return () => {
-      if (scannerRef.current?.isScanning) {
-        scannerRef.current.stop().catch(() => {});
+      stopped = true;
+      const s = scannerRef.current;
+      scannerRef.current = null;
+      if (s) {
+        (s.isScanning ? s.stop().catch(() => {}) : Promise.resolve())
+          .finally(() => { try { s.clear(); } catch { } });
       }
     };
-  }, [onScan]);
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
