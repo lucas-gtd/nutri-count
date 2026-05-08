@@ -13,6 +13,11 @@ export class FoodsController {
     return this.foodsService.search(query || '');
   }
 
+  @Get('off-search')
+  offSearch(@Query('q') query: string) {
+    return this.foodsService.searchOpenFoodFacts(query || '');
+  }
+
   @Get('barcode/:barcode')
   findByBarcode(@Param('barcode') barcode: string) {
     return this.foodsService.findByBarcode(barcode);

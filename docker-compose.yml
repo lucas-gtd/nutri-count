@@ -23,6 +23,8 @@ services:
       DATABASE_URL: postgresql://user:password@db:5432/nutrition
       JWT_SECRET: change_this_secret_in_production
       PORT: "3001"
+      # NODE_ENV is intentionally development here; production uses deploiement/docker-compose.yml
+      NODE_ENV: development
     depends_on:
       db:
         condition: service_healthy

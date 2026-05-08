@@ -78,4 +78,36 @@ export class FoodsService {
     });
     return this.foodsRepository.save(food);
   }
+
+  async searchOpenFoodFacts(query: string): Promise<any[]> {
+    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=code,product_name,brands,nutriments&page_size=20&sort_by=unique_scans_n`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'NutriCount/1.0 (https://github.com/lucas-gtd/nutri-count)',
+        },
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!Array.isArray(data.products)) return [];
+      return data.products
+        .filter((p: any) => p.product_name)
+        .map((p: any) => {
+          const n = p.nutriments || {};
+          return {
+            barcode: p.code || undefined,
+            name: p.product_name,
+            brand: p.brands || undefined,
+            calories_per_100g: n['energy-kcal_100g'] ?? 0,
+            proteins_per_100g: n['proteins_100g'] ?? 0,
+            carbs_per_100g: n['carbohydrates_100g'] ?? 0,
+            fats_per_100g: n['fat_100g'] ?? 0,
+            fiber_per_100g: n['fiber_100g'] ?? 0,
+          };
+        });
+    } catch {
+      return [];
+    }
+  }
 }

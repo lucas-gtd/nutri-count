@@ -15,40 +15,6 @@ const mealLabels: Record<MealType, string> = {
   snack: 'Collation',
 };
 
-const OFF_SEARCH_URL = 'https://world.openfoodfacts.org/api/v2/search';
-const OFF_FIELDS = 'code,product_name,brands,nutriments';
-
-async function searchOpenFoodFacts(query: string): Promise<any[]> {
-  try {
-    const url = `${OFF_SEARCH_URL}?search_terms=${encodeURIComponent(query)}&fields=${OFF_FIELDS}&page_size=100&sort_by=unique_scans_n`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!Array.isArray(data.products)) return [];
-    return data.products
-      .filter((p: any) =>
-        p.product_name?.toLowerCase().includes(query.toLowerCase()),
-      )
-      .slice(0, 20)
-      .map((p: any) => {
-        const n = p.nutriments || {};
-        return {
-          _offProduct: true,
-          barcode: p.code || undefined,
-          name: p.product_name,
-          brand: p.brands || undefined,
-          calories_per_100g: n['energy-kcal_100g'] ?? 0,
-          proteins_per_100g: n['proteins_100g'] ?? 0,
-          carbs_per_100g: n['carbohydrates_100g'] ?? 0,
-          fats_per_100g: n['fat_100g'] ?? 0,
-          fiber_per_100g: n['fiber_100g'] ?? 0,
-        };
-      });
-  } catch {
-    return [];
-  }
-}
-
 export default function Diary() {
   const [selectedMeal, setSelectedMeal] = useState<MealType>('breakfast');
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,8 +43,8 @@ export default function Diary() {
     setSearching(true);
     try {
       const [local, remote] = await Promise.all([
-        api.searchFoods(searchQuery),
-        searchOpenFoodFacts(searchQuery),
+        api.searchFoods(searchQuery).catch(() => [] as any[]),
+        api.searchFoodsOff(searchQuery).catch(() => [] as any[]),
       ]);
       const localNames = new Set(local.map((f: any) => f.name.toLowerCase()));
       const merged = [
@@ -110,10 +76,9 @@ export default function Diary() {
   const handleAdd = async () => {
     if (!selectedFood) return;
     let food = selectedFood;
-    if (food._offProduct) {
-      // Save the OFF product to the local DB first
-      const { _offProduct, ...dto } = food;
-      food = await api.importFoodFromOff(dto);
+    if (!food.id) {
+      // OFF result not yet in local DB — import it first
+      food = await api.importFoodFromOff(food);
     }
     await api.addDiaryEntry({
       food_id: food.id,
@@ -136,7 +101,7 @@ export default function Diary() {
       <h1 className="text-2xl font-bold">Journal alimentaire</h1>
 
       {/* Meal type selector */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(Object.keys(mealLabels) as MealType[]).map((meal) => (
           <button
             key={meal}
@@ -164,13 +129,13 @@ export default function Diary() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="flex-1 border rounded-md px-3 py-2"
+              className="flex-1 min-w-0 border rounded-md px-3 py-2"
               placeholder="Nom de l'aliment..."
             />
             <button
               onClick={handleSearch}
               disabled={searching}
-              className="bg-green-600 text-white px-4 py-2 rounded-md disabled:opacity-60"
+              className="shrink-0 bg-green-600 text-white px-4 py-2 rounded-md disabled:opacity-60"
             >
               {searching ? 'Recherche…' : 'Chercher'}
             </button>
@@ -181,13 +146,13 @@ export default function Diary() {
           <label className="block text-sm font-medium mb-1">
             Ou scanner un code-barre
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               type="text"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleBarcode()}
-              className="flex-1 border rounded-md px-3 py-2"
+              className="flex-1 min-w-0 border rounded-md px-3 py-2"
               placeholder="Code-barre..."
             />
             <button
@@ -214,9 +179,9 @@ export default function Diary() {
         <div className="bg-white rounded-lg shadow p-4">
           <h3 className="font-medium mb-2">Résultats</h3>
           <ul className="divide-y">
-            {searchResults.map((food) => (
+            {searchResults.map((food, idx) => (
               <li
-                key={food.id}
+                key={food.id ?? food.barcode ?? `${food.name}-${idx}`}
                 className="py-2 flex justify-between items-center cursor-pointer hover:bg-gray-50 px-2 rounded"
                 onClick={() => {
                   setSelectedFood(food);

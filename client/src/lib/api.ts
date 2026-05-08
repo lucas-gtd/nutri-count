@@ -42,6 +42,7 @@ export const api = {
 
   // Foods
   searchFoods: (q: string) => request<any[]>(`/foods/search?q=${encodeURIComponent(q)}`),
+  searchFoodsOff: (q: string) => request<any[]>(`/foods/off-search?q=${encodeURIComponent(q)}`),
   getFoodByBarcode: (barcode: string) => request<any>(`/foods/barcode/${barcode}`),
   importFoodFromOff: (data: any) =>
     request<any>('/foods/import', { method: 'POST', body: JSON.stringify(data) }),

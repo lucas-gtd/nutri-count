@@ -39,7 +39,7 @@ export default function Dashboard() {
       <h1 className="text-2xl font-bold">Tableau de bord</h1>
 
       {/* Calorie ring */}
-      <div className="bg-white rounded-lg shadow p-6 flex items-center gap-8">
+      <div className="bg-white rounded-lg shadow p-6 flex flex-col sm:flex-row items-center gap-6">
         <div className="relative w-32 h-32">
           <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
             <circle
@@ -87,7 +87,7 @@ export default function Dashboard() {
       </div>
 
       {/* Macros */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-white rounded-lg shadow p-4 text-center">
           <div className="text-2xl font-bold text-blue-600">
             {totals.proteins}g
