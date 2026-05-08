@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
+import { OpenFoodFacts } from '@openfoodfacts/openfoodfacts-nodejs';
 import { Food, FoodSource } from './food.entity';
 import { CreateFoodDto } from './dto/create-food.dto';
+
+const offClient = new OpenFoodFacts(globalThis.fetch);
 
 @Injectable()
 export class FoodsService {
@@ -36,24 +39,13 @@ export class FoodsService {
     let food = await this.foodsRepository.findOne({ where: { barcode } });
     if (food) return food;
 
-    // Fetch from Open Food Facts
-    const response = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${barcode}`,
-      {
-        headers: {
-          'User-Agent':
-            'NutriCount/1.0 (https://github.com/lucas-gtd/nutri-count)',
-        },
-      },
-    );
-    if (!response.ok) throw new NotFoundException('Product not found');
-    const data = await response.json();
+    const { data, error } = await offClient.getProductV3(barcode);
 
-    if (data.status !== 1 || !data.product) {
+    if (error || !data || data.status !== 'success' || !data.product) {
       throw new NotFoundException('Product not found');
     }
 
-    const product = data.product;
+    const product = data.product as any;
     const nutriments = product.nutriments || {};
 
     food = this.foodsRepository.create({
@@ -80,18 +72,20 @@ export class FoodsService {
   }
 
   async searchOpenFoodFacts(query: string): Promise<any[]> {
-    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=code,product_name,brands,nutriments&page_size=20&sort_by=unique_scans_n`;
     try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent':
-            'NutriCount/1.0 (https://github.com/lucas-gtd/nutri-count)',
-        },
-      });
-      if (!res.ok) return [];
-      const data = await res.json();
-      if (!Array.isArray(data.products)) return [];
-      return data.products
+      const { data, error } = await offClient.search({
+        fields: 'code,product_name,brands,nutriments',
+        page_size: 20,
+        sort_by: 'unique_scans_n',
+        search_terms: query,
+      } as any);
+
+      if (error || !data) return [];
+
+      const products = (data as any).products;
+      if (!Array.isArray(products)) return [];
+
+      return products
         .filter((p: any) => p.product_name)
         .map((p: any) => {
           const n = p.nutriments || {};
